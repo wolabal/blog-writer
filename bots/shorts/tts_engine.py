@@ -231,6 +231,53 @@ def _gcloud_marks_to_words(words: list[str], timepoints: list[dict]) -> list[dic
     return result
 
 
+# ─── Typecast ────────────────────────────────────────────────
+
+def _tts_typecast(text: str, output_path: Path, cfg: dict) -> list[dict]:
+    """
+    Typecast TTS API + Whisper 단어별 타임스탬프.
+    POST https://api.typecast.ai/v1/text-to-speech
+    Returns: [{word, start, end}, ...]
+    """
+    import requests
+
+    api_key = os.environ.get('TYPECAST_API_KEY', '')
+    if not api_key:
+        raise RuntimeError('TYPECAST_API_KEY not set')
+
+    tc_cfg = cfg.get('tts', {}).get('typecast', {})
+    voice_id = tc_cfg.get('voice_id', '')
+    if not voice_id:
+        raise RuntimeError('typecast.voice_id not configured in shorts_config.json')
+
+    base_url = os.environ.get('TYPECAST_BASE_URL', 'https://api.typecast.ai')
+    url = f'{base_url}/v1/text-to-speech'
+    headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
+    payload = {
+        'voice_id': voice_id,
+        'text': text,
+        'model': tc_cfg.get('model', 'ssfm-v30'),
+        'prompt': {
+            'emotion_type': 'preset',
+            'emotion_preset': tc_cfg.get('emotion_preset', 'normal'),
+            'emotion_intensity': tc_cfg.get('emotion_intensity', 1.0),
+        },
+        'output': {
+            'audio_format': 'wav',
+            'audio_tempo': tc_cfg.get('audio_tempo', 1.0),
+            'audio_pitch': tc_cfg.get('audio_pitch', 0),
+            'volume': tc_cfg.get('volume', 100),
+        },
+    }
+
+    resp = requests.post(url, headers=headers, json=payload, timeout=60)
+    resp.raise_for_status()
+    output_path.write_bytes(resp.content)
+
+    timestamps = _whisper_timestamps(output_path)
+    return timestamps
+
+
 # ─── Edge TTS + Whisper ───────────────────────────────────────
 
 def _tts_edge(text: str, output_path: Path, cfg: dict) -> list[dict]:
@@ -329,6 +376,7 @@ def generate_tts(
     engine_map = {
         'elevenlabs':   _tts_elevenlabs,
         'google_cloud': _tts_google_cloud,
+        'typecast':     _tts_typecast,
         'edge_tts':     _tts_edge,
     }
 

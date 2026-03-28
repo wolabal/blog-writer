@@ -6,7 +6,7 @@ Pipeline:
   0. Asset Resolution (semi_auto: input/ 폴더 체크)
   1. Script Extraction (LLM → 규칙 기반 폴백)
   2. Visual Sourcing (stock_fetcher + character overlay)
-  3. TTS Generation (ElevenLabs → Google Cloud → Edge TTS)
+  3. TTS Generation (ElevenLabs → Google Cloud → Typecast → Edge TTS)
   4. Caption Rendering (ASS, 단어별 하이라이트)
   5. Video Assembly (FFmpeg)
   6. YouTube Upload (Data API v3)
