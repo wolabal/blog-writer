@@ -36,16 +36,27 @@ if not exist data\published mkdir data\published
 if not exist data\analytics mkdir data\analytics
 if not exist data\images mkdir data\images
 if not exist data\drafts mkdir data\drafts
+if not exist data\originals mkdir data\originals
+if not exist data\outputs mkdir data\outputs
+if not exist data\assist mkdir data\assist
+if not exist data\assist\sessions mkdir data\assist\sessions
+if not exist data\assist\inbox mkdir data\assist\inbox
+if not exist data\novels mkdir data\novels
 if not exist logs mkdir logs
+if not exist config\novels mkdir config\novels
 
-REM Register scheduler.py in Windows Task Scheduler
-set SCRIPT_PATH=%~dp0bots\scheduler.py
+REM Download fonts (Noto Sans KR for card/shorts converter)
+echo [INFO] Downloading fonts...
+venv\Scripts\python.exe scripts\download_fonts.py
+
+REM Register scheduler.py in Windows Task Scheduler (blog.cmd 경유)
+set BLOG_CMD=%~dp0blog.cmd
 set PYTHON_PATH=%~dp0venv\Scripts\pythonw.exe
 
 schtasks /query /tn "BlogEngine" >nul 2>&1
 if errorlevel 1 (
-    schtasks /create /tn "BlogEngine" /tr "\"%PYTHON_PATH%\" \"%SCRIPT_PATH%\"" /sc onlogon /rl highest /f
-    echo [OK] BlogEngine registered in Windows Task Scheduler
+    schtasks /create /tn "BlogEngine" /tr "\"%BLOG_CMD%\" scheduler" /sc onlogon /rl highest /f
+    echo [OK] BlogEngine registered in Windows Task Scheduler (blog scheduler)
 ) else (
     echo [INFO] BlogEngine task already registered.
 )
@@ -58,7 +69,10 @@ echo.
 echo Next steps:
 echo 1. Open .env and fill in all API keys
 echo 2. Run scripts\get_token.py to get Google OAuth token
-echo 3. Update BLOG_MAIN_ID in config\blogs.json with your actual blog ID
-echo 4. Start scheduler with: python bots\scheduler.py
+echo    (Blogger + Search Console + YouTube OAuth)
+echo 3. Update BLOG_MAIN_ID in .env with your Blogger blog ID
+echo 4. Start scheduler:  blog scheduler
+echo 5. Start dashboard:  blog server  (http://localhost:8080)
+echo 6. CLI status check: blog status
 echo.
 pause

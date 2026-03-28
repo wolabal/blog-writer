@@ -286,17 +286,26 @@ python scripts\get_token.py
 
 ### 스케줄러 시작 (권장)
 
+안전한 기본 진입점은 프로젝트 venv Python + `blog_runtime.py` 입니다.
+
 ```bash
-venv\Scripts\activate
-python bots\scheduler.py
+venv\Scripts\python.exe blog_runtime.py scheduler
 ```
 
 백그라운드 실행 (Windows):
 ```bash
-pythonw bots\scheduler.py
+venv\Scripts\python.exe blog_runtime.py scheduler
 ```
 
 Windows 작업 스케줄러를 통해 PC 시작 시 자동 실행되도록 `setup.bat`이 등록합니다.
+
+### 대시보드 시작
+
+```bash
+venv\Scripts\python.exe blog_runtime.py server
+```
+
+`blog.cmd` 역시 내부적으로 같은 런처를 사용합니다.
 
 ### 개별 봇 단독 실행
 

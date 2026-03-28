@@ -251,10 +251,10 @@ class FFmpegSlidesEngine(VideoEngine):
             'Alignment=2,'
             'Bold=1'
         )
-        srt_esc = str(srt_path).replace('\\', '/').replace(':', '\\:')
+        srt_esc = str(srt_path).replace('\\', '/').replace(':', '\\:').replace("'", r"\'")
         return self._run_ffmpeg([
             '-i', video_mp4,
-            '-vf', f'subtitles={srt_esc}:force_style=\'{style}\'',
+            '-vf', f"subtitles=filename='{srt_esc}':force_style='{style}'",
             '-c:v', 'libx264', '-c:a', 'copy',
             output_mp4,
         ])

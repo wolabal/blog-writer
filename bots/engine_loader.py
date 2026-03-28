@@ -96,28 +96,59 @@ class ClaudeWriter(BaseWriter):
 
 
 class OpenClawWriter(BaseWriter):
-    """OpenClaw CLI를 subprocess로 호출하는 글쓰기 엔진"""
+    """OpenClaw CLI를 subprocess로 호출하는 글쓰기 엔진 (ChatGPT Pro OAuth)"""
+
+    # Windows에서 npm 글로벌 .cmd 스크립트 우선 사용
+    _CLI = 'openclaw.cmd' if os.name == 'nt' else 'openclaw'
 
     def __init__(self, cfg: dict):
         self.agent_name = cfg.get('agent_name', 'blog-writer')
-        self.timeout = cfg.get('timeout', 120)
+        self.timeout = cfg.get('timeout', 300)
 
     def write(self, prompt: str, system: str = '') -> str:
         try:
-            cmd = ['openclaw', 'run', self.agent_name, '--prompt', prompt]
-            if system:
-                cmd += ['--system', system]
+            message = f"{system}\n\n{prompt}".strip() if system else prompt
+            cmd = [
+                self._CLI, 'agent',
+                '--agent', self.agent_name,
+                '--message', message,
+                '--json',
+            ]
             result = subprocess.run(
                 cmd,
                 capture_output=True,
-                text=True,
                 timeout=self.timeout,
-                encoding='utf-8',
+                shell=False,
             )
+            stderr_str = result.stderr.decode('utf-8', errors='replace').strip()
             if result.returncode != 0:
-                logger.error(f"OpenClawWriter 오류: {result.stderr[:300]}")
+                logger.error(f"OpenClawWriter returncode={result.returncode} stderr={stderr_str[:300]}")
                 return ''
-            return result.stdout.strip()
+            # stdout이 비어있는 경우 — openclaw가 stderr에만 출력하거나 인증 실패
+            if not result.stdout:
+                logger.error(f"OpenClawWriter stdout 비어있음 (returncode=0) stderr={stderr_str[:300]}")
+                return ''
+            stdout = result.stdout.decode('utf-8', errors='replace').strip()
+            if not stdout:
+                logger.error("OpenClawWriter stdout 디코딩 후 비어있음")
+                return ''
+            # 1) JSON 응답 시도 — JSON 블록 추출
+            json_candidate = stdout
+            if not stdout.startswith('{'):
+                import re
+                m = re.search(r'\{[\s\S]*\}', stdout)
+                json_candidate = m.group(0) if m else ''
+            if json_candidate:
+                try:
+                    data = json.loads(json_candidate)
+                    payloads = data.get('result', {}).get('payloads', [])
+                    if payloads:
+                        return payloads[0].get('text', '') or stdout
+                except json.JSONDecodeError:
+                    pass
+            # 2) JSON 파싱 실패 또는 payloads 없음 → plain text 그대로 반환
+            logger.info(f"OpenClawWriter plain text 응답 ({len(stdout)}자)")
+            return stdout
         except subprocess.TimeoutExpired:
             logger.error(f"OpenClawWriter 타임아웃 ({self.timeout}초)")
             return ''
@@ -160,6 +191,128 @@ class GeminiWriter(BaseWriter):
             return ''
         except Exception as e:
             logger.error(f"GeminiWriter 오류: {e}")
+            return ''
+
+
+class ClaudeWebWriter(BaseWriter):
+    """Playwright Chromium에 세션 쿠키를 주입해 claude.ai를 자동화하는 Writer
+
+    Chrome을 닫을 필요 없음 — Playwright 자체 Chromium을 별도로 실행.
+    필요 환경변수:
+        CLAUDE_WEB_COOKIE  — __Secure-next-auth.session-token 값
+    """
+
+    def __init__(self, cfg: dict):
+        self.cookie = os.getenv(cfg.get('cookie_env', 'CLAUDE_WEB_COOKIE'), '')
+        self.timeout_ms = cfg.get('timeout', 180) * 1000
+
+    def write(self, prompt: str, system: str = '') -> str:
+        # claude.ai는 Cloudflare Turnstile로 헤드리스 브라우저를 차단함
+        # 쿠키 세션 만료 여부와 무관하게 자동화 불가 → 비활성화
+        logger.warning("ClaudeWebWriter: Cloudflare 차단으로 비활성화 (수동 사용 권장)")
+        return ''
+        if not self.cookie:
+            logger.warning("CLAUDE_WEB_COOKIE 없음 — ClaudeWebWriter 비활성화")
+            return ''
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            logger.warning("playwright 미설치 — ClaudeWebWriter 비활성화")
+            return ''
+        token = self.cookie.strip()
+        message = f"{system}\n\n{prompt}".strip() if system else prompt
+        try:
+            with sync_playwright() as pw:
+                browser = pw.chromium.launch(
+                    headless=True,
+                    args=['--disable-blink-features=AutomationControlled'],
+                )
+                ctx = browser.new_context(
+                    user_agent=(
+                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                        'AppleWebKit/537.36 (KHTML, like Gecko) '
+                        'Chrome/131.0.0.0 Safari/537.36'
+                    ),
+                )
+                # 세션 쿠키 주입
+                ctx.add_cookies([{
+                    'name': '__Secure-next-auth.session-token',
+                    'value': token,
+                    'domain': 'claude.ai',
+                    'path': '/',
+                    'secure': True,
+                    'httpOnly': True,
+                }])
+                page = ctx.new_page()
+                try:
+                    from playwright_stealth import stealth_sync
+                    stealth_sync(page)
+                except ImportError:
+                    pass
+                page.goto('https://claude.ai/new', wait_until='domcontentloaded', timeout=60000)
+                page.wait_for_timeout(3000)
+                # 입력창 대기
+                editor = page.locator('[contenteditable="true"]').first
+                editor.wait_for(timeout=30000)
+                editor.click()
+                page.keyboard.type(message, delay=30)
+                page.keyboard.press('Enter')
+                # 스트리밍 완료 대기 — 전송 버튼 재활성화
+                page.wait_for_selector(
+                    'button[aria-label="Send message"]:not([disabled])',
+                    timeout=self.timeout_ms,
+                )
+                # 응답 텍스트 추출
+                blocks = page.locator('.font-claude-message')
+                text = blocks.last.inner_text() if blocks.count() else ''
+                browser.close()
+                return text.strip()
+        except Exception as e:
+            logger.error(f"ClaudeWebWriter 오류: {e}")
+            return ''
+
+
+class GeminiWebWriter(BaseWriter):
+    """gemini.google.com 웹 세션 쿠키를 사용하는 비공식 Writer (gemini-webapi)
+
+    필요 환경변수:
+        GEMINI_WEB_1PSID    — 브라우저 DevTools > Application > Cookies >
+                              google.com 에서 __Secure-1PSID 값
+        GEMINI_WEB_1PSIDTS  — 같은 위치에서 __Secure-1PSIDTS 값
+    """
+
+    def __init__(self, cfg: dict):
+        self.psid = os.getenv(cfg.get('psid_env', 'GEMINI_WEB_1PSID'), '')
+        self.psidts = os.getenv(cfg.get('psidts_env', 'GEMINI_WEB_1PSIDTS'), '')
+
+    def write(self, prompt: str, system: str = '') -> str:
+        if not self.psid or not self.psidts:
+            logger.warning("GEMINI_WEB_1PSID / GEMINI_WEB_1PSIDTS 없음 — GeminiWebWriter 비활성화")
+            return ''
+        try:
+            import asyncio
+            from gemini_webapi import GeminiClient
+
+            async def _run():
+                client = GeminiClient(secure_1psid=self.psid, secure_1psidts=self.psidts)
+                await client.init(timeout=30, auto_close=False, close_delay=300)
+                message = f"{system}\n\n{prompt}".strip() if system else prompt
+                resp = await client.generate_content(message)
+                return resp.text
+
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        future = pool.submit(asyncio.run, _run())
+                        return future.result(timeout=120)
+                else:
+                    return loop.run_until_complete(_run())
+            except RuntimeError:
+                return asyncio.run(_run())
+        except Exception as e:
+            logger.error(f"GeminiWebWriter 오류: {e}")
             return ''
 
 
@@ -458,6 +611,8 @@ class EngineLoader:
             'claude': ClaudeWriter,
             'openclaw': OpenClawWriter,
             'gemini': GeminiWriter,
+            'claude_web': ClaudeWebWriter,
+            'gemini_web': GeminiWebWriter,
         }
         cls = writers.get(provider, ClaudeWriter)
         logger.info(f"Writer 로드: {provider} ({cls.__name__})")

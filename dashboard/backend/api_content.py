@@ -4,12 +4,13 @@ Content 탭 API — 칸반 보드, 승인/거부, 수동 트리거
 """
 import json
 import subprocess
-import sys
 from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+from runtime_guard import project_python_path, run_with_project_python
 
 BASE_DIR = Path(__file__).parent.parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -115,8 +116,17 @@ async def reject_content(item_id: str):
 @router.post("/manual-write")
 async def manual_write(req: WriteRequest):
     """collector_bot + writer_bot 수동 트리거"""
-    python = sys.executable
     bots_dir = BASE_DIR / "bots"
+    python = project_python_path()
+
+    if not python.exists():
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"프로젝트 가상환경 Python이 없습니다: {python}. "
+                "venv 생성 후 requirements.txt를 설치하세요."
+            ),
+        )
 
     results = []
 
@@ -124,8 +134,8 @@ async def manual_write(req: WriteRequest):
     collector = bots_dir / "collector_bot.py"
     if collector.exists():
         try:
-            result = subprocess.run(
-                [python, str(collector)],
+            result = run_with_project_python(
+                [str(collector)],
                 capture_output=True,
                 text=True,
                 timeout=120,
@@ -135,22 +145,23 @@ async def manual_write(req: WriteRequest):
             results.append({
                 "step": "collector",
                 "success": result.returncode == 0,
+                "python": str(python),
                 "output": result.stdout[-500:] if result.stdout else "",
                 "error": result.stderr[-300:] if result.stderr else "",
             })
         except subprocess.TimeoutExpired:
-            results.append({"step": "collector", "success": False, "error": "타임아웃"})
+            results.append({"step": "collector", "success": False, "python": str(python), "error": "타임아웃"})
         except Exception as e:
-            results.append({"step": "collector", "success": False, "error": str(e)})
+            results.append({"step": "collector", "success": False, "python": str(python), "error": str(e)})
     else:
-        results.append({"step": "collector", "success": False, "error": "파일 없음"})
+        results.append({"step": "collector", "success": False, "python": str(python), "error": "파일 없음"})
 
     # writer_bot 실행
     writer = bots_dir / "writer_bot.py"
     if writer.exists():
         try:
-            result = subprocess.run(
-                [python, str(writer)],
+            result = run_with_project_python(
+                [str(writer)],
                 capture_output=True,
                 text=True,
                 timeout=300,
@@ -160,14 +171,15 @@ async def manual_write(req: WriteRequest):
             results.append({
                 "step": "writer",
                 "success": result.returncode == 0,
+                "python": str(python),
                 "output": result.stdout[-500:] if result.stdout else "",
                 "error": result.stderr[-300:] if result.stderr else "",
             })
         except subprocess.TimeoutExpired:
-            results.append({"step": "writer", "success": False, "error": "타임아웃"})
+            results.append({"step": "writer", "success": False, "python": str(python), "error": "타임아웃"})
         except Exception as e:
-            results.append({"step": "writer", "success": False, "error": str(e)})
+            results.append({"step": "writer", "success": False, "python": str(python), "error": str(e)})
     else:
-        results.append({"step": "writer", "success": False, "error": "파일 없음"})
+        results.append({"step": "writer", "success": False, "python": str(python), "error": "파일 없음"})
 
-    return {"results": results}
+    return {"python": str(python), "results": results}

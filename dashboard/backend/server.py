@@ -8,6 +8,13 @@ dashboard/backend/server.py
 import os
 from pathlib import Path
 
+from runtime_guard import ensure_project_runtime
+
+ensure_project_runtime(
+    "dashboard server",
+    ["fastapi", "uvicorn", "python-dotenv"],
+)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -23,6 +30,7 @@ from dashboard.backend import (
     api_tools,
     api_cost,
     api_logs,
+    api_assist,
 )
 
 app = FastAPI(title="The 4th Path — Control Panel", version="1.0.0")
@@ -51,6 +59,7 @@ app.include_router(api_connections.router, prefix="/api")
 app.include_router(api_tools.router, prefix="/api")
 app.include_router(api_cost.router, prefix="/api")
 app.include_router(api_logs.router, prefix="/api")
+app.include_router(api_assist.router, prefix="/api")
 
 @app.get("/api/health")
 async def health():

@@ -52,7 +52,7 @@ dashboard/
 
 ```bash
 cd D:/workspace/blog-writer
-pip install fastapi uvicorn python-dotenv
+venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ### 프론트엔드 의존성 설치
@@ -69,6 +69,8 @@ npm install
 - **프로덕션**: `start.bat` 더블클릭
 - **개발 모드**: `start_dev.bat` 더블클릭
 
+두 스크립트 모두 프로젝트 `venv\Scripts\python.exe`가 없으면 즉시 중단합니다.
+
 ### Linux/Mac
 
 ```bash
@@ -84,7 +86,7 @@ bash dashboard/start.sh dev
 ```bash
 # 터미널 1 — 백엔드
 cd D:/workspace/blog-writer
-python -m uvicorn dashboard.backend.server:app --port 8080 --reload
+venv\Scripts\python.exe blog_runtime.py server --reload
 
 # 터미널 2 — 프론트엔드 (개발)
 cd D:/workspace/blog-writer/dashboard/frontend
@@ -117,6 +119,6 @@ npm run build
 
 ```bash
 # 백엔드를 0.0.0.0으로 바인딩하면 Tailscale IP로 접속 가능
-python -m uvicorn dashboard.backend.server:app --host 0.0.0.0 --port 8080
+venv\Scripts\python.exe blog_runtime.py server
 # 접속: http://<tailscale-ip>:8080
 ```

@@ -215,6 +215,86 @@ def get_public_url(image_path: str) -> str:
     return ''
 
 
+# ─── 비디오 호스팅 (릴스용) ──────────────────────────
+
+_local_video_server = None
+
+
+def start_local_video_server(port: int = 8766) -> str:
+    """
+    로컬 HTTP 파일 서버 시작 — 비디오(MP4) 전용.
+    Returns: base URL (예: http://192.168.1.100:8766)
+    """
+    import socket
+    import threading
+    import http.server
+    import functools
+
+    global _local_video_server
+    if _local_video_server:
+        return _local_video_server
+
+    outputs_dir = str(BASE_DIR / 'data' / 'outputs')
+    handler = functools.partial(
+        http.server.SimpleHTTPRequestHandler, directory=outputs_dir
+    )
+    server = http.server.HTTPServer(('0.0.0.0', port), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        local_ip = '127.0.0.1'
+
+    base_url = f'http://{local_ip}:{port}'
+    _local_video_server = base_url
+    logger.info(f"로컬 비디오 서버 시작: {base_url}")
+    return base_url
+
+
+def get_public_video_url(video_path: str) -> str:
+    """
+    비디오 파일 → 공개 URL 반환 (Instagram Reels, TikTok 등).
+    Instagram Reels API는 공개 접근 가능한 MP4 URL이 필요.
+
+    우선순위:
+    1. LOCAL_IMAGE_SERVER=true → 로컬 HTTP 서버 (Tailscale 외부 접속 필요)
+    2. VIDEO_HOST_BASE_URL 환경변수 → 직접 지정한 CDN/서버 URL
+
+    운영 환경에서는 Tailscale로 미니PC를 외부에서 접근하거나,
+    Cloudflare Tunnel 등을 사용하세요.
+    """
+    if not Path(video_path).exists():
+        logger.error(f"비디오 파일 없음: {video_path}")
+        return ''
+
+    # 1. 직접 지정한 CDN/서버 베이스 URL
+    video_base = os.getenv('VIDEO_HOST_BASE_URL', '').rstrip('/')
+    if video_base:
+        filename = Path(video_path).name
+        url = f'{video_base}/{filename}'
+        logger.info(f"비디오 외부 URL: {url}")
+        return url
+
+    # 2. 로컬 HTTP 서버 (Tailscale/ngrok으로 외부 접근 가능한 경우)
+    if os.getenv('LOCAL_IMAGE_SERVER', '').lower() == 'true':
+        base_url = start_local_video_server()
+        filename = Path(video_path).name
+        url = f'{base_url}/{filename}'
+        logger.warning(f"로컬 비디오 서버 URL (외부 접근 필요): {url}")
+        return url
+
+    logger.warning(
+        "비디오 공개 URL 생성 불가. .env에 VIDEO_HOST_BASE_URL을 설정하거나 "
+        "LOCAL_IMAGE_SERVER=true (Tailscale/ngrok)로 설정하세요."
+    )
+    return ''
+
+
 if __name__ == '__main__':
     import sys
     if len(sys.argv) > 1:

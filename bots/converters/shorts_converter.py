@@ -649,11 +649,12 @@ def burn_subtitles(video_mp4: str, srt_path: str, output_mp4: str) -> bool:
         'Alignment=2,'
         'Bold=1'
     )
-    # srt 경로에서 역슬래시 → 슬래시 (ffmpeg 호환)
-    srt_esc = str(srt_path).replace('\\', '/').replace(':', '\\:')
+    # Windows 경로는 subtitles 필터에서 옵션 구분자(:)로 오인될 수 있어
+    # filename=... 형태로 명시하고 슬래시/콜론만 ffmpeg 호환 형태로 정규화한다.
+    srt_esc = str(srt_path).replace('\\', '/').replace(':', '\\:').replace("'", r"\'")
     return _run_ffmpeg([
         '-i', video_mp4,
-        '-vf', f'subtitles={srt_esc}:force_style=\'{style}\'',
+        '-vf', f"subtitles=filename='{srt_esc}':force_style='{style}'",
         '-c:v', 'libx264', '-c:a', 'copy',
         output_mp4,
     ])

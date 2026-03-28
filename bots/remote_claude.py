@@ -18,6 +18,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).parent.parent
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 TELEGRAM_CHAT_ID = int(os.getenv('TELEGRAM_CHAT_ID', '0'))
+REMOTE_CLAUDE_POLLING_ENABLED = os.getenv('REMOTE_CLAUDE_POLLING_ENABLED', '').lower() in {'1', 'true', 'yes', 'on'}
 
 logging.basicConfig(
     level=logging.INFO,
@@ -90,6 +91,10 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
+    if not REMOTE_CLAUDE_POLLING_ENABLED:
+        logger.info("Remote Claude Bot polling 비활성화 — 기본 운영은 scheduler.py Telegram 리스너 사용")
+        return
+
     if not TELEGRAM_BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN이 없습니다.")
         return

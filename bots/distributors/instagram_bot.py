@@ -142,6 +142,104 @@ def publish_container(container_id: str) -> str:
         return ''
 
 
+def upload_video_container(video_url: str, caption: str) -> str:
+    """
+    Instagram Reels 업로드 컨테이너 생성.
+    video_url: 공개 접근 가능한 MP4 URL
+    Returns: container_id
+    """
+    if not _check_credentials():
+        return ''
+
+    url = f"{GRAPH_API_BASE}/{INSTAGRAM_ACCOUNT_ID}/media"
+    params = {
+        'media_type': 'REELS',
+        'video_url': video_url,
+        'caption': caption,
+        'share_to_feed': 'true',
+        'access_token': INSTAGRAM_ACCESS_TOKEN,
+    }
+    try:
+        resp = requests.post(url, data=params, timeout=30)
+        resp.raise_for_status()
+        container_id = resp.json().get('id', '')
+        logger.info(f"Reels 컨테이너 생성: {container_id}")
+        return container_id
+    except Exception as e:
+        logger.error(f"Instagram Reels 컨테이너 생성 실패: {e}")
+        return ''
+
+
+def wait_for_video_ready(container_id: str, max_wait: int = 300) -> bool:
+    """
+    비디오 컨테이너 처리 완료 대기 (최대 max_wait초).
+    Reels는 인코딩 시간이 이미지보다 길다.
+    """
+    status_url = f"{GRAPH_API_BASE}/{container_id}"
+    for _ in range(max_wait // 10):
+        try:
+            resp = requests.get(
+                status_url,
+                params={'fields': 'status_code', 'access_token': INSTAGRAM_ACCESS_TOKEN},
+                timeout=10,
+            )
+            status = resp.json().get('status_code', '')
+            if status == 'FINISHED':
+                return True
+            if status in ('ERROR', 'EXPIRED'):
+                logger.error(f"Reels 컨테이너 오류: {status}")
+                return False
+            logger.debug(f"Reels 인코딩 중: {status}")
+        except Exception as e:
+            logger.warning(f"Reels 상태 확인 오류: {e}")
+        time.sleep(10)
+    logger.warning("Reels 컨테이너 준비 시간 초과")
+    return False
+
+
+def publish_reels(article: dict, video_path_or_url: str) -> bool:
+    """
+    쇼츠 MP4를 Instagram Reels로 게시.
+    video_path_or_url: 로컬 MP4 파일 경로 또는 공개 MP4 URL
+      - 로컬 경로인 경우 image_host.get_public_video_url()로 공개 URL 변환
+      - http/https URL인 경우 그대로 사용
+    """
+    if not _check_credentials():
+        logger.info("Instagram 미설정 — Reels 발행 건너뜀")
+        return False
+
+    logger.info(f"Instagram Reels 발행 시작: {article.get('title', '')}")
+
+    # 로컬 경로 → 공개 URL 변환
+    video_url = video_path_or_url
+    if not video_path_or_url.startswith('http'):
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent))
+        from image_host import get_public_video_url
+        video_url = get_public_video_url(video_path_or_url)
+        if not video_url:
+            logger.error(
+                "Reels 공개 URL 변환 실패 — .env에 VIDEO_HOST_BASE_URL 또는 "
+                "LOCAL_IMAGE_SERVER=true (Tailscale) 설정 필요"
+            )
+            return False
+
+    caption = build_caption(article)
+    container_id = upload_video_container(video_url, caption)
+    if not container_id:
+        return False
+
+    if not wait_for_video_ready(container_id):
+        return False
+
+    post_id = publish_container(container_id)
+    if not post_id:
+        return False
+
+    _log_published(article, post_id, 'instagram_reels')
+    return True
+
+
 def publish_card(article: dict, image_path_or_url: str) -> bool:
     """
     카드 이미지를 인스타그램 피드에 게시.

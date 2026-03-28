@@ -1,31 +1,39 @@
 {
   "_comment": "The 4th Path 블로그 자동 수익 엔진 — 엔진 설정 (v3)",
   "_updated": "2026-03-26",
-
   "writing": {
-    "provider": "claude",
+    "provider": "openclaw",
+    "_comment_provider": "openclaw=ChatGPT Pro(OAuth), claude_web=Claude Max(웹쿠키), gemini_web=Gemini Pro(웹쿠키), claude=Anthropic API키, gemini=Google AI API키",
     "options": {
+      "openclaw": {
+        "agent_name": "blog-writer",
+        "timeout": 300
+      },
+      "claude_web": {
+        "cookie_env": "CLAUDE_WEB_COOKIE",
+        "ua_env": "CLAUDE_WEB_UA",
+        "timeout": 240
+      },
+      "gemini_web": {
+        "psid_env": "GEMINI_WEB_1PSID",
+        "psidts_env": "GEMINI_WEB_1PSIDTS"
+      },
       "claude": {
         "api_key_env": "ANTHROPIC_API_KEY",
-        "model": "claude-opus-4-5",
+        "model": "claude-opus-4-6",
         "max_tokens": 4096,
         "temperature": 0.7
       },
-      "openclaw": {
-        "agent_name": "blog-writer",
-        "timeout": 120
-      },
       "gemini": {
         "api_key_env": "GEMINI_API_KEY",
-        "model": "gemini-2.0-flash",
+        "model": "gemini-2.5-pro",
         "max_tokens": 4096,
         "temperature": 0.7
       }
     }
   },
-
   "tts": {
-    "provider": "gtts",
+    "provider": "openai",
     "options": {
       "google_cloud": {
         "api_key_env": "GOOGLE_TTS_API_KEY",
@@ -52,9 +60,8 @@
       }
     }
   },
-
   "image_generation": {
-    "provider": "dalle",
+    "provider": "external",
     "options": {
       "dalle": {
         "api_key_env": "OPENAI_API_KEY",
@@ -67,9 +74,8 @@
       }
     }
   },
-
   "video_generation": {
-    "provider": "ffmpeg_slides",
+    "provider": "sora",
     "options": {
       "ffmpeg_slides": {
         "resolution": "1080x1920",
@@ -108,7 +114,6 @@
       }
     }
   },
-
   "publishing": {
     "blogger": {
       "enabled": true,
@@ -119,7 +124,11 @@
       "channel_id_env": "YOUTUBE_CHANNEL_ID",
       "category": "shorts",
       "privacy": "public",
-      "tags": ["쇼츠", "AI", "the4thpath"]
+      "tags": [
+        "쇼츠",
+        "AI",
+        "the4thpath"
+      ]
     },
     "instagram": {
       "enabled": false,
@@ -136,7 +145,6 @@
       "comment": "노벨피아 연재 — 추후 활성화"
     }
   },
-
   "quality_gates": {
     "gate1_research_min_score": 60,
     "gate2_writing_min_score": 70,
@@ -146,7 +154,6 @@
     "min_word_count": 300,
     "safety_check": true
   },
-
   "schedule": {
     "collector": "07:00",
     "writer": "08:00",
@@ -155,7 +162,6 @@
     "youtube_uploader": "10:00",
     "analytics": "22:00"
   },
-
   "brand": {
     "name": "The 4th Path",
     "sub": "Independent Tech Media",
@@ -163,7 +169,6 @@
     "url": "the4thpath.com",
     "cta": "팔로우하면 매일 이런 정보를 받습니다"
   },
-
   "optional_keys": {
     "SEEDANCE_API_KEY": "Seedance 2.0 AI 영상 생성",
     "ELEVENLABS_API_KEY": "ElevenLabs 고품질 TTS",

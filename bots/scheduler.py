@@ -12,12 +12,20 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from runtime_guard import ensure_project_runtime
+
+ensure_project_runtime(
+    "scheduler",
+    ["apscheduler", "python-dotenv", "python-telegram-bot", "anthropic"],
+)
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 import anthropic
+import re
 
 load_dotenv()
 
@@ -120,7 +128,9 @@ def job_ai_writer():
 def _trigger_openclaw_writer():
     topics_dir = DATA_DIR / 'topics'
     drafts_dir = DATA_DIR / 'drafts'
+    originals_dir = DATA_DIR / 'originals'
     drafts_dir.mkdir(exist_ok=True)
+    originals_dir.mkdir(exist_ok=True)
     today = datetime.now().strftime('%Y%m%d')
     topic_files = sorted(topics_dir.glob(f'{today}_*.json'))
     if not topic_files:
@@ -128,24 +138,110 @@ def _trigger_openclaw_writer():
         return
     for topic_file in topic_files[:3]:
         draft_check = drafts_dir / topic_file.name
-        if draft_check.exists():
+        original_check = originals_dir / topic_file.name
+        if draft_check.exists() or original_check.exists():
             continue
         topic_data = json.loads(topic_file.read_text(encoding='utf-8'))
         logger.info(f"글 작성 요청: {topic_data.get('topic', '')}")
-        _call_openclaw(topic_data, draft_check)
+        _call_openclaw(topic_data, original_check)
+
+
+def _safe_slug(text: str) -> str:
+    slug = re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
+    return slug or datetime.now().strftime('article-%Y%m%d-%H%M%S')
+
+
+def _build_openclaw_prompt(topic_data: dict) -> tuple[str, str]:
+    topic = topic_data.get('topic', '').strip()
+    corner = topic_data.get('corner', '쉬운세상').strip() or '쉬운세상'
+    description = topic_data.get('description', '').strip()
+    source = topic_data.get('source_url') or topic_data.get('source') or ''
+    published_at = topic_data.get('published_at', '')
+    system = (
+        "당신은 The 4th Path 블로그 엔진의 전문 에디터다. "
+        "반드시 아래 섹션 헤더 형식만 사용해 완성된 Blogger-ready HTML 원고를 출력하라. "
+        "본문(BODY)은 HTML로 작성하고, KEY_POINTS는 3줄 이내로 작성한다."
+    )
+    prompt = f"""다음 글감을 바탕으로 한국어 블로그 원고를 작성해줘.
+
+주제: {topic}
+코너: {corner}
+설명: {description}
+출처: {source}
+발행시점 참고: {published_at}
+
+출력 형식은 아래 섹션만 정확히 사용해.
+
+---TITLE---
+제목
+
+---META---
+검색 설명 150자 이내
+
+---SLUG---
+영문 소문자 slug
+
+---TAGS---
+태그1, 태그2, 태그3
+
+---CORNER---
+{corner}
+
+---BODY---
+<h2>...</h2> 형식의 Blogger-ready HTML 본문
+
+---KEY_POINTS---
+- 핵심포인트1
+- 핵심포인트2
+- 핵심포인트3
+
+---COUPANG_KEYWORDS---
+키워드1, 키워드2
+
+---SOURCES---
+{source} | 참고 출처 | {published_at}
+
+---DISCLAIMER---
+필요 시 짧은 면책문구
+"""
+    return system, prompt
 
 
 def _call_openclaw(topic_data: dict, output_path: Path):
-    logger.info(f"OpenClaw 호출 (플레이스홀더): {topic_data.get('topic', '')}")
-    # OpenClaw 연동 완료 후 아래 주석 해제:
-    # import subprocess
-    # result = subprocess.run(
-    #     ['openclaw', 'run', 'blog-writer', '--input', json.dumps(topic_data)],
-    #     capture_output=True, text=True
-    # )
-    # output = result.stdout
-    topic_data['_pending_openclaw'] = True
-    output_path.write_text(json.dumps(topic_data, ensure_ascii=False, indent=2), encoding='utf-8')
+    logger.info(f"OpenClaw 작성 요청: {topic_data.get('topic', '')}")
+    sys.path.insert(0, str(BASE_DIR))
+    sys.path.insert(0, str(BASE_DIR / 'bots'))
+
+    from engine_loader import EngineLoader
+    from article_parser import parse_output
+
+    system, prompt = _build_openclaw_prompt(topic_data)
+    writer = EngineLoader().get_writer()
+    raw_output = writer.write(prompt, system=system).strip()
+    if not raw_output:
+        raise RuntimeError('OpenClaw writer 응답이 비어 있습니다.')
+
+    article = parse_output(raw_output)
+    if not article:
+        raise RuntimeError('OpenClaw writer 출력 파싱 실패')
+
+    article.setdefault('title', topic_data.get('topic', '').strip())
+    article['slug'] = article.get('slug') or _safe_slug(article['title'])
+    article['corner'] = article.get('corner') or topic_data.get('corner', '쉬운세상')
+    article['topic'] = topic_data.get('topic', '')
+    article['description'] = topic_data.get('description', '')
+    article['quality_score'] = topic_data.get('quality_score', 0)
+    article['source'] = topic_data.get('source', '')
+    article['source_url'] = topic_data.get('source_url') or topic_data.get('source') or ''
+    article['published_at'] = topic_data.get('published_at', '')
+    article['created_at'] = datetime.now().isoformat()
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(article, ensure_ascii=False, indent=2),
+        encoding='utf-8',
+    )
+    logger.info(f"OpenClaw 원고 저장 완료: {output_path.name}")
 
 
 def job_convert():
@@ -261,6 +357,37 @@ def _distribute_instagram():
         if success:
             ig_flag.touch()
             logger.info(f"Instagram 발행 완료: {card_file.name}")
+
+
+def job_distribute_instagram_reels():
+    """10:30 — Instagram Reels (쇼츠 MP4) 발행"""
+    if not _publish_enabled:
+        return
+    logger.info("[스케줄] Instagram Reels 발행")
+    try:
+        _distribute_instagram_reels()
+    except Exception as e:
+        logger.error(f"Instagram Reels 배포 오류: {e}")
+
+
+def _distribute_instagram_reels():
+    sys.path.insert(0, str(BASE_DIR / 'bots' / 'distributors'))
+    import instagram_bot
+    today = datetime.now().strftime('%Y%m%d')
+    outputs_dir = DATA_DIR / 'outputs'
+    for shorts_file in sorted(outputs_dir.glob(f'{today}_*_shorts.mp4')):
+        flag = shorts_file.with_suffix('.ig_reels_done')
+        if flag.exists():
+            continue
+        slug = shorts_file.stem.replace(f'{today}_', '').replace('_shorts', '')
+        article = _load_article_by_slug(today, slug)
+        if not article:
+            logger.warning(f"Instagram Reels: 원본 article 없음 ({slug})")
+            continue
+        success = instagram_bot.publish_reels(article, str(shorts_file))
+        if success:
+            flag.touch()
+            logger.info(f"Instagram Reels 발행 완료: {shorts_file.name}")
 
 
 def job_distribute_x():
@@ -810,7 +937,9 @@ def setup_scheduler() -> AsyncIOScheduler:
     scheduler.add_job(lambda: job_publish(1), 'cron',
                       hour=9, minute=0, id='blog_publish')                         # 09:00 블로그
     scheduler.add_job(job_distribute_instagram, 'cron',
-                      hour=10, minute=0, id='instagram_dist')                      # 10:00 인스타
+                      hour=10, minute=0, id='instagram_dist')                      # 10:00 인스타 카드
+    scheduler.add_job(job_distribute_instagram_reels, 'cron',
+                      hour=10, minute=30, id='instagram_reels_dist')               # 10:30 인스타 릴스
     scheduler.add_job(job_distribute_x, 'cron',
                       hour=11, minute=0, id='x_dist')                             # 11:00 X
     scheduler.add_job(job_distribute_tiktok, 'cron',
