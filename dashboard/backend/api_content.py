@@ -57,14 +57,18 @@ async def get_content():
 
     review = _read_folder_cards(DATA_DIR / "pending_review", "review")
 
-    published = _read_folder_cards(DATA_DIR / "published", "published")
+    published = _read_folder_cards(DATA_DIR / "published", "published")[:20]
 
     return {
+        "queue": queue,
+        "writing": writing,
+        "review": review,
+        "published": published,
         "columns": {
             "queue": {"label": "글감큐", "cards": queue},
             "writing": {"label": "작성중", "cards": writing},
             "review": {"label": "검수대기", "cards": review},
-            "published": {"label": "발행완료", "cards": published[:20]},  # 최근 20개만
+            "published": {"label": "발행완료", "cards": published},
         }
     }
 

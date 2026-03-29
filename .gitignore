@@ -79,3 +79,4 @@ dashboard/frontend/node_modules/
 *.swp
 *.swo
 Thumbs.db
+.worktrees/

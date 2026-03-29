@@ -80,6 +80,7 @@ def _top_posts(records: list, limit: int = 5) -> list:
             posts.append({
                 "title": r["title"],
                 "visitors": r["visitors"],
+                "views": r["visitors"],
                 "corner": r.get("corner", ""),
                 "published_at": r.get("date", ""),
             })
@@ -102,10 +103,16 @@ def _platform_performance(records: list) -> list:
 @router.get("/analytics")
 async def get_analytics():
     records = _load_all_analytics()
+    kpi = _aggregate_kpi(records)
+    top_posts = _top_posts(records)
     return {
-        "kpi": _aggregate_kpi(records),
+        "visitors": kpi["visitors"],
+        "pageviews": kpi["pageviews"],
+        "avg_duration_sec": kpi["avg_duration_sec"],
+        "ctr": kpi["ctr"],
+        "kpi": kpi,
         "corners": _aggregate_corners(records),
-        "top_posts": _top_posts(records),
+        "top_posts": top_posts,
         "platforms": _platform_performance(records),
         "total_records": len(records),
     }

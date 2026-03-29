@@ -51,14 +51,14 @@ dashboard/
 ### 백엔드 의존성 설치
 
 ```bash
-cd D:/workspace/blog-writer
+cd <project-root>
 venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ### 프론트엔드 의존성 설치
 
 ```bash
-cd D:/workspace/blog-writer/dashboard/frontend
+cd <project-root>/dashboard/frontend
 npm install
 ```
 
@@ -85,11 +85,11 @@ bash dashboard/start.sh dev
 
 ```bash
 # 터미널 1 — 백엔드
-cd D:/workspace/blog-writer
+cd <project-root>
 venv\Scripts\python.exe blog_runtime.py server --reload
 
 # 터미널 2 — 프론트엔드 (개발)
-cd D:/workspace/blog-writer/dashboard/frontend
+cd <project-root>/dashboard/frontend
 npm run dev
 
 # 또는 프론트 빌드 (프로덕션)

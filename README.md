@@ -205,18 +205,35 @@ writing 옵션: openclaw / claude / gemini / gemini_web / openai
 
 ## 사용법
 
-### CLI (blog.cmd)
+### Runtime CLI (`blog.cmd`)
 
 ```batch
 blog scheduler          스케줄러 시작 (메인 프로세스)
 blog server             대시보드 서버 시작
 blog status             현재 상태 확인
-blog collect            트렌드 수집 즉시 실행
-blog write              AI 글쓰기 즉시 실행
-blog publish            블로그 발행 즉시 실행
-blog convert            변환 엔진 실행
-blog shorts             Shorts 즉시 생산
-blog shorts --dry-run   업로드 제외 테스트
+blog pipeline           파이프라인 단계 확인
+blog content            콘텐츠 큐 확인
+blog review             검수 대기 목록 확인
+blog approve <id>       검수 승인
+blog reject <id>        검수 반려
+blog sessions           수동 어시스트 세션 목록
+blog session <id>       세션 상세 확인
+blog assist <url>       수동 어시스트 세션 시작
+blog logs [n]           최근 로그 확인
+blog analytics          분석 요약 확인
+```
+
+### Packaged CLI (`bw`)
+
+```bash
+python -m blogwriter.cli --help
+bw init
+bw write
+bw shorts
+bw publish
+bw status
+bw doctor
+bw config show
 ```
 
 ---
@@ -419,13 +436,25 @@ python bots/shorts_bot.py --upload path/video.mp4   기존 영상 업로드
 
 | Phase | 상태 | 내용 |
 |-------|------|------|
-| Phase 1A | 완료 | 블로그 자동화 기본 파이프라인 |
-| Phase 1B | 코드 완료 | Instagram, X 배포 (API 키 필요) |
-| Phase 2 | 코드 완료 | Shorts 변환, TikTok, YouTube |
-| Shorts Bot | 완료 | YouTube Shorts 자동 생산 파이프라인 |
-| 대시보드 | 완료 | React + FastAPI 웹 대시보드 |
-| 소설 파이프라인 | 완료 | 자동 소설 연재 |
-| 수동 어시스트 | 완료 | 반자동 콘텐츠 제작 |
+| Phase 1A | 로컬 동작 확인 | 블로그 자동화 기본 파이프라인 |
+| Phase 1B | 부분 구현 | Instagram, X 배포 모듈 존재, 운영 흐름 보강 필요 |
+| Phase 2 | 부분 구현 | Shorts 변환 및 TikTok, YouTube 관련 코드 포함 |
+| Shorts Bot | 로컬 검증 필요 | YouTube Shorts 자동 생산 파이프라인 |
+| 대시보드 | 로컬 빌드 완료 | React + FastAPI 웹 대시보드 |
+| 소설 파이프라인 | 코드 포함 | 자동 소설 연재 |
+| 수동 어시스트 | 코드 포함 | 반자동 콘텐츠 제작 |
+
+---
+
+## Release Verification
+
+로컬 릴리즈 체크리스트:
+
+```bash
+python -m pytest tests -v
+python -m compileall blogwriter bots dashboard blog_engine_cli.py blog_runtime.py runtime_guard.py
+cd dashboard/frontend && npm run build
+```
 
 ---
 

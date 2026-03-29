@@ -1,13 +1,12 @@
 """
 blogwriter/cli.py
-Blog Writer MVP CLI - 8 commands
+Blog Writer MVP CLI - 7 commands
 
 Usage:
     bw                      # Interactive menu
     bw write [TOPIC]        # Write a blog post
     bw shorts               # Create a shorts video
     bw publish              # Publish pending articles
-    bw distribute           # Distribute to SNS platforms
     bw status               # Show system status
     bw doctor               # Check API keys and dependencies
     bw config show          # Show resolved configuration
@@ -56,7 +55,6 @@ def _interactive_menu():
         ("  bw write",      "블로그 글 작성"),
         ("  bw shorts",     "쇼츠 영상 생성"),
         ("  bw publish",    "대기 중인 글 발행"),
-        ("  bw distribute", "SNS 플랫폼에 배포"),
         ("  bw status",     "시스템 상태 확인"),
         ("  bw doctor",     "API 키 및 의존성 점검"),
         ("  bw config show","현재 설정 보기"),
@@ -159,23 +157,6 @@ def publish_cmd():
         console.print(f"[green]✓ 발행 완료[/green]: {result} 건")
     except ImportError:
         console.print("[red]publisher_bot 로드 실패[/red]")
-    except Exception as e:
-        console.print(f"[red]오류: {e}[/red]")
-
-
-@app.command()
-@click.option('--to', help='특정 플랫폼으로만 배포 (예: youtube,tiktok)')
-def distribute(to):
-    """SNS 플랫폼에 콘텐츠 배포."""
-    platforms = to.split(',') if to else None
-    console.print(f"\n[bold]배포 시작[/bold]")
-    if platforms:
-        console.print(f"대상: {', '.join(platforms)}")
-
-    try:
-        sys.path.insert(0, str(BASE_DIR))
-        # Use scheduler or direct bot calls
-        console.print("[yellow]배포 기능은 현재 개발 중입니다[/yellow]")
     except Exception as e:
         console.print(f"[red]오류: {e}[/red]")
 
