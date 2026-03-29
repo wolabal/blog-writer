@@ -1,6 +1,6 @@
 {
   "_comment": "The 4th Path 블로그 자동 수익 엔진 — 엔진 설정 (v3)",
-  "_updated": "2026-03-26",
+  "_updated": "2026-03-29",
   "writing": {
     "provider": "openclaw",
     "_comment_provider": "openclaw=ChatGPT Pro(OAuth), claude_web=Claude Max(웹쿠키), gemini_web=Gemini Pro(웹쿠키), claude=Anthropic API키, gemini=Google AI API키",
@@ -75,8 +75,40 @@
     }
   },
   "video_generation": {
-    "provider": "sora",
+    "provider": "smart_router",
     "options": {
+      "smart_router": {
+        "priority": ["kling_free", "veo3", "seedance2", "ffmpeg_slides"],
+        "daily_cost_limit_usd": 0.50,
+        "prefer_free_first": true,
+        "fallback": "ffmpeg_slides"
+      },
+      "kling_free": {
+        "api_url": "https://api.klingai.com/v1",
+        "api_key_env": "KLING_API_KEY",
+        "free_daily_credits": 66,
+        "mode": "standard",
+        "resolution": "720p",
+        "aspect_ratio": "9:16",
+        "audio": true,
+        "cost_per_sec": 0
+      },
+      "veo3": {
+        "api_key_env": "GEMINI_API_KEY",
+        "model": "veo-3.1",
+        "resolution": "720p",
+        "aspect_ratio": "9:16",
+        "audio": true,
+        "cost_per_sec": 0.03
+      },
+      "seedance2": {
+        "provider": "fal.ai",
+        "api_key_env": "FAL_API_KEY",
+        "model": "seedance-2.0",
+        "resolution": "720p",
+        "audio": true,
+        "cost_per_sec": 0.022
+      },
       "ffmpeg_slides": {
         "resolution": "1080x1920",
         "fps": 30,
@@ -88,16 +120,12 @@
         "burn_subtitles": true
       },
       "seedance": {
+        "_comment": "레거시 — seedance2/FAL_API_KEY로 대체됨",
         "api_url": "https://api.seedance2.ai/v1/generate",
         "api_key_env": "SEEDANCE_API_KEY",
         "resolution": "1080x1920",
         "duration": "10s",
         "audio": true,
-        "fallback": "ffmpeg_slides"
-      },
-      "sora": {
-        "comment": "OpenAI Sora — API 접근 가능 시 활성화",
-        "api_key_env": "OPENAI_API_KEY",
         "fallback": "ffmpeg_slides"
       },
       "runway": {
@@ -108,7 +136,7 @@
         "fallback": "ffmpeg_slides"
       },
       "veo": {
-        "comment": "Google Veo 3.1 — API 접근 가능 시 활성화",
+        "comment": "Google Veo 3.1 레거시 — veo3로 대체됨",
         "api_key_env": "GEMINI_API_KEY",
         "fallback": "ffmpeg_slides"
       }
@@ -170,7 +198,8 @@
     "cta": "팔로우하면 매일 이런 정보를 받습니다"
   },
   "optional_keys": {
-    "SEEDANCE_API_KEY": "Seedance 2.0 AI 영상 생성",
+    "KLING_API_KEY": "Kling 3.0 AI 영상 생성 (66 무료 크레딧/일)",
+    "FAL_API_KEY": "Seedance 2.0 AI 영상 생성 (fal.ai)",
     "ELEVENLABS_API_KEY": "ElevenLabs 고품질 TTS",
     "GEMINI_API_KEY": "Google Gemini 글쓰기 / Veo 영상",
     "RUNWAY_API_KEY": "Runway Gen-3 AI 영상 생성"
